@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../store';
-import type { RBDProject, RBDNode, RBDLink, Component } from '../../types';
+import type { RBDProject, RBDNode, RBDLink, Component, RBDSystemResults } from '../../types';
+import { calcSystemResults } from '../../utils/rbdCalculations';
 
 const BW = 140;
 const BH = 60;
@@ -140,6 +141,7 @@ export default function RBDModule() {
     const block: RBDNode = {
       id: uuidv4(), componentId: comp.id, componentName: comp.name,
       x: Math.max(0, x), y: Math.max(0, y), quantity: 1,
+      totalUnits: 1, minRequired: 1, redundancyType: 'series',
     };
     updateProject({ ...project, blocks: [...project.blocks, block] });
   }, [project, state.components, updateProject]);
@@ -560,12 +562,12 @@ export default function RBDModule() {
                     }
                   }} />
 
-                <text x={BW / 2} y={BH / 2 - 7}
+                <text x={BW / 2} y={BH / 2 - 10}
                   textAnchor="middle" dominantBaseline="middle"
                   fill="#f0f6fc" fontSize="11" fontWeight="600">
                   {block.componentName.length > 18 ? block.componentName.slice(0, 18) + '..' : block.componentName}
                 </text>
-                <text x={BW / 2} y={BH / 2 + 9}
+                <text x={BW / 2} y={BH / 2 + 6}
                   textAnchor="middle" dominantBaseline="middle"
                   fill="#8b949e" fontSize="9">
                   {(() => {
@@ -573,6 +575,13 @@ export default function RBDModule() {
                     return comp ? `λ=${comp.failureRate.toExponential(1)}` : 'No component';
                   })()}
                 </text>
+                {block.redundancyType === 'k-out-of-n' && (
+                  <text x={BW / 2} y={BH / 2 + 18}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill="#58a6ff" fontSize="8" fontWeight="700">
+                    {block.minRequired}oo{block.totalUnits}
+                  </text>
+                )}
 
                 {/* 8 ports */}
                 {PORTS.map(([px, py], i) => {
@@ -659,6 +668,51 @@ export default function RBDModule() {
                   ),
                 })} />
             </div>
+            <div className="form-group">
+              <label>Redundancy Type</label>
+              <select className="form-control" value={block.redundancyType}
+                onChange={e => updateProject({
+                  ...project,
+                  blocks: project.blocks.map((b: RBDNode) =>
+                    b.id === block.id ? {
+                      ...b,
+                      redundancyType: e.target.value as 'series' | 'k-out-of-n',
+                      totalUnits: e.target.value === 'k-out-of-n' ? Math.max(b.totalUnits, 2) : 1,
+                      minRequired: e.target.value === 'k-out-of-n' ? Math.min(b.minRequired, Math.max(b.totalUnits, 2)) : 1,
+                    } : b
+                  ),
+                })}>
+                <option value="series">Series (n=r=1)</option>
+                <option value="k-out-of-n">k-out-of-n (Active Redundancy)</option>
+              </select>
+            </div>
+            {block.redundancyType === 'k-out-of-n' && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Total Units (n)</label>
+                  <input className="form-control" type="number" min="2" max="10" value={block.totalUnits}
+                    onChange={e => {
+                      const n = parseInt(e.target.value) || 2;
+                      updateProject({
+                        ...project,
+                        blocks: project.blocks.map((b: RBDNode) =>
+                          b.id === block.id ? { ...b, totalUnits: n, minRequired: Math.min(b.minRequired, n) } : b
+                        ),
+                      });
+                    }} />
+                </div>
+                <div className="form-group">
+                  <label>Min Required (r)</label>
+                  <input className="form-control" type="number" min="1" max={block.totalUnits} value={block.minRequired}
+                    onChange={e => updateProject({
+                      ...project,
+                      blocks: project.blocks.map((b: RBDNode) =>
+                        b.id === block.id ? { ...b, minRequired: Math.min(parseInt(e.target.value) || 1, b.totalUnits) } : b
+                      ),
+                    })} />
+                </div>
+              </div>
+            )}
             {block.componentId && (() => {
               const comp = state.components.find((c: Component) => c.id === block.componentId);
               if (!comp) return null;

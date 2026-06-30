@@ -44,6 +44,12 @@ export interface RBDNode {
   x: number;
   y: number;
   quantity: number;
+  /** Total number of identical units in the redundancy group (n) */
+  totalUnits: number;
+  /** Minimum number of units required for operation (r) */
+  minRequired: number;
+  /** Redundancy type: 'series' = single unit, 'k-out-of-n' = active redundancy */
+  redundancyType: 'series' | 'k-out-of-n';
 }
 
 export interface RBDLink {
@@ -54,6 +60,29 @@ export interface RBDLink {
   targetPort: number;
   connectorType?: 'straight' | 'right-angle';
   elbowX?: number;
+}
+
+/* ===== RBD Calculation Results ===== */
+export interface RBDCalculationResult {
+  blockId: string;
+  componentName: string;
+  n: number;
+  r: number;
+  lambda: number;        // λi (component failure rate)
+  mttr: number;          // MTTRi (component MTTR)
+  mu: number;            // µ = 1/MTTR (repair rate)
+  lambda_s: number;      // λs (system failure rate for this block)
+  mtbf_s: number;        // MTBFs = 1/λs
+  mttr_s: number;        // MTTRs = MTTR / (n-r+1)
+  lambda_mttr_product: number; // λs × MTTRs
+}
+
+export interface RBDSystemResults {
+  areaResults: RBDCalculationResult[];
+  totalLambda: number;    // Σ λs
+  totalMTBF: number;      // 1/Σ λs
+  totalMTTR: number;      // Σ(λs × MTTRs) / Σ λs
+  availability: number;   // MTBF / (MTBF + MTTR)
 }
 
 /* ===== RAM Analysis Types ===== */

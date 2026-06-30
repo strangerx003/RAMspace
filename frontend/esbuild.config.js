@@ -1,13 +1,22 @@
 const esbuild = require('esbuild');
 const path = require('path');
+const fs = require('fs');
 
 const isProd = process.argv.includes('--prod');
 const isWatch = process.argv.includes('--watch');
+const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'');
+const outfile = path.join(__dirname, `public/bundle.${dateStr}.js`);
+
+// Update index.html to reference the new bundle
+const indexPath = path.join(__dirname, 'public/index.html');
+let html = fs.readFileSync(indexPath, 'utf8');
+html = html.replace(/src="bundle\.\d+\.js"/, `src="bundle.${dateStr}.js"`);
+fs.writeFileSync(indexPath, html);
 
 const buildOptions = {
   entryPoints: [path.join(__dirname, 'src/index.tsx')],
   bundle: true,
-  outfile: path.join(__dirname, 'public/bundle.js'),
+  outfile,
   loader: { '.tsx': 'tsx', '.ts': 'ts', '.css': 'css' },
   minify: isProd,
   sourcemap: !isProd,

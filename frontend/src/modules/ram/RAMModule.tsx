@@ -1,21 +1,41 @@
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useApp } from '../../store';
 import type { RAMProject, RAMResults, ComponentRAMResult, TimePoint } from '../../types';
+import { calcSystemResults } from '../../utils/rbdCalculations';
 
 export default function RAMModule() {
   const { state, dispatch } = useApp();
-  const [showNew, setShowNew] = useState(false);
-  const [name, setName] = useState('');
-  const [missionTime, setMissionTime] = useState(8760);
-  const [selectedComps, setSelectedComps] = useState<string[]>([]);
+  const [showNew, setShowNew] = React.useState(false);
+  const [name, setName] = React.useState('');
+  const [missionTime, setMissionTime] = React.useState(8760);
+  const [selectedComps, setSelectedComps] = React.useState<string[]>([]);
 
   const project = state.ramProjects.find((p: RAMProject) => p.id === state.selectedRAMProject);
+  
+  // Auto-calculate from selected RBD project if available
+  const rbdProject = state.selectedRBDProject 
+    ? state.rbdProjects.find(p => p.id === state.selectedRBDProject)
+    : null;
+
+  const rbdSystem = useMemo(() => {
+    if (rbdProject && rbdProject.blocks.length > 0) {
+      return calcSystemResults(rbdProject.blocks, state.components);
+    }
+    return null;
+  }, [rbdProject, state.components]);
+
+  // Whether we're using RBD-based calculation
+  const useRbd = rbdProject && rbdSystem !== null;
 
   const createProject = () => {
     if (!name.trim() || selectedComps.length === 0) return;
     const now = new Date().toISOString();
-    const proj: RAMProject = { id: uuidv4(), name, description: '', componentIds: selectedComps, missionTime, results: null, createdAt: now, updatedAt: now };
+    const proj: RAMProject = { 
+      id: uuidv4(), name, description: '', 
+      componentIds: selectedComps, missionTime, results: null, 
+      createdAt: now, updatedAt: now 
+    };
     dispatch({ type: 'ADD_RAM_PROJECT', payload: proj });
     dispatch({ type: 'SET_SELECTED_RAM', payload: proj.id });
     setShowNew(false); setName(''); setSelectedComps([]);
@@ -23,19 +43,51 @@ export default function RAMModule() {
 
   const runAnalysis = () => {
     if (!project) return;
-    const comps = project.componentIds.map(id => state.components.find(c => c.id === id)).filter(Boolean);
-    if (comps.length === 0) return;
+    
+    // Get components and their RBD redundancy configuration if available
+    let comps: { failureRate: number; mtbf: number; mttr: number; id: string; name: string }[] = [];
+    
+    if (useRbd && rbdSystem) {
+      // Use RBD block results for component data
+      comps = rbdSystem.areaResults.map(r => ({
+        failureRate: r.lambda_s,
+        mtbf: r.mtbf_s,
+        mttr: r.mttr_s,
+        id: r.blockId,
+        name: r.componentName,
+      }));
+    } else {
+      // Fallback: get components from selected IDs
+      comps = project.componentIds
+        .map(id => state.components.find(c => c.id === id))
+        .filter(Boolean)
+        .map(c => ({
+          failureRate: c!.failureRate,
+          mtbf: c!.mtbf,
+          mttr: c!.mttr,
+          id: c!.id,
+          name: c!.name,
+        }));
+    }
+    
+    if (comps.length === 0) {
+      dispatch({ type: 'SHOW_TOAST', payload: 'No components to analyze' });
+      return;
+    }
 
     const t = project.missionTime;
     const componentResults: ComponentRAMResult[] = comps.map(c => {
-      if (!c) return null!;
       const R = Math.exp(-c.failureRate * t);
       const A = c.mtbf / (c.mtbf + c.mttr);
-      const M = 1 - Math.exp(-t / c.mttr);
-      return { componentId: c.id, componentName: c.name, reliability: R, availability: A, maintainability: M, failureRate: c.failureRate, mtbf: c.mtbf, mttr: c.mttr };
-    }).filter(Boolean);
+      const M = c.mttr > 0 ? 1 - Math.exp(-t / c.mttr) : 0;
+      return { 
+        componentId: c.id, componentName: c.name, 
+        reliability: R, availability: A, maintainability: M, 
+        failureRate: c.failureRate, mtbf: c.mtbf, mttr: c.mttr 
+      };
+    });
 
-    // Series system
+    // Series combination of components/blocks
     const sysR = componentResults.reduce((acc, cr) => acc * cr.reliability, 1);
     const sysA = componentResults.reduce((acc, cr) => acc * cr.availability, 1);
     const sysFR = componentResults.reduce((acc, cr) => acc + cr.failureRate, 0);
@@ -45,7 +97,7 @@ export default function RAMModule() {
       : 0;
     const sysM = sysMTTR > 0 ? 1 - Math.exp(-t / sysMTTR) : 0;
 
-    // Time series
+    // Time series data
     const steps = 100;
     const dt = t / steps;
     const relOverTime: TimePoint[] = [];
@@ -54,7 +106,6 @@ export default function RAMModule() {
       const time = i * dt;
       let rSys = 1, aSys = 1;
       comps.forEach(c => {
-        if (!c) return;
         rSys *= Math.exp(-c.failureRate * time);
         aSys *= c.mtbf / (c.mtbf + c.mttr);
       });
@@ -65,7 +116,8 @@ export default function RAMModule() {
     const results: RAMResults = {
       systemReliability: sysR, systemAvailability: sysA, systemMaintainability: sysM,
       systemMTBF: sysMTBF, systemMTTR: sysMTTR, systemMTTF: sysMTBF,
-      systemFailureRate: sysFR, componentResults, reliabilityOverTime: relOverTime, availabilityOverTime: availOverTime,
+      systemFailureRate: sysFR, componentResults, 
+      reliabilityOverTime: relOverTime, availabilityOverTime: availOverTime,
     };
 
     dispatch({ type: 'UPDATE_RAM_PROJECT', payload: { ...project, results, updatedAt: new Date().toISOString() } });
