@@ -2,6 +2,7 @@
   "name": "rams-frontend",
   "version": "2.0.0",
   "private": true,
+  "engines": { "node": "24.x" },
   "scripts": {
     "dev": "node esbuild.config.js --watch",
     "build": "node esbuild.config.js --prod",
