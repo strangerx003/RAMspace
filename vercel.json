@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "projectSettings": {
-    "framework": "react"
-  },
   "builds": [
     {
       "src": "frontend/package.json",
@@ -23,7 +20,16 @@
   },
   "headers": [
     {
-      "source": "/public/(.*)",
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=3600"
+        }
+      ]
+    },
+    {
+      "source": "/bundle\\.(\\d+)\\.js$",
       "headers": [
         {
           "key": "Cache-Control",
@@ -32,18 +38,13 @@
       ]
     },
     {
-      "source": "/index.html",
+      "source": "/styles\\.css$",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=3600, s-maxage=3600"
+          "value": "public, max-age=31536000, immutable"
         }
       ]
     }
-  ],
-  "github": {
-    "enabled": true,
-    "autoAlias": true,
-    "autoJobCancelation": true
-  }
+  ]
 }
