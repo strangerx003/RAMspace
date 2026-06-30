@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "public": true,
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "frontend/public",
+  "framework": "react",
   "routes": [
     {
-      "src": "/bundle\\.(\\d+)\\.js",
+      "src": "/bundle\\.[0-9]+\\.js",
       "headers": {
         "Cache-Control": "public, max-age=31536000, immutable"
       }
@@ -17,7 +17,7 @@
       }
     },
     {
-      "src": "/(.*)",
+      "src": "^/(?!.*\\.).*$",
       "dest": "/index.html"
     }
   ]
