@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Testing
+test_calc.js
+test_calc2.js
+test_calc3.js
+
+# Documentation
+*.md
+!README.md
+
+# Development
+.env.local
+.env.development
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+python-calc/
+*.py
+__pycache__/
+
+# Build artifacts (keep only frontend public)
+backend/
+
+# Git
+.git/
+.gitignore
