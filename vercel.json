@@ -1,11 +1,13 @@
 {
   "version": 2,
+  "framework": null,
   "builds": [
     {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "frontend/public"
+        "distDir": "frontend/public",
+        "buildCommand": "cd frontend && npm install && node esbuild.config.js --prod"
       }
     }
   ],
